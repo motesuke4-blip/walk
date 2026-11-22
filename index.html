@@ -58,6 +58,8 @@ button{cursor:pointer}
 h1{font-size:20px;line-height:1.3;margin:16px 0 2px}
 .route{color:var(--sub);margin:0 0 6px}
 .sync{font-size:12px;color:var(--sub);margin:0 0 12px}
+.revbtn{min-height:40px;margin:2px 0 8px;padding:0 14px;border-radius:20px;border:1.5px solid var(--acc);background:var(--surface);color:var(--acc);font-weight:700;font-size:14px}
+.revbtn.arm{border-color:var(--late);color:var(--late)}
 .sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
 .sum div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 8px;text-align:center;box-shadow:var(--shadow)}
 .sum b{display:block;font-size:19px;line-height:1.2}
@@ -178,6 +180,7 @@ let cur = (location.hash||"").replace("#","") || lsGet("tw1:cur");
 if(!VISIBLE.some(l=>l.id===cur)) cur = VISIBLE[0].id;
 let openIdx = null;
 let resetArmed = false;
+let revArmed = false;
 
 function pad(n){ return String(n).padStart(2,"0"); }
 function t2m(s){ const p=(s||"06:00").split(":"); return (+p[0])*60+(+p[1]); }
@@ -209,7 +212,10 @@ function defaults(l){
   };
 }
 function normalize(l,s){
+  const wantRev = !!(s && typeof s==="object" && s.rev);
+  if(!!l.rev!==wantRev) flipLine(l);
   const n=l.rows.length, d=defaults(l);
+  d.rev = wantRev;
   if(s && typeof s==="object"){
     ["start","speed","factor","t","fc"].forEach(k=>{ if(s[k]!==undefined && s[k]!==null) d[k]=s[k]; });
     ["brk","nd","act","memo"].forEach(k=>{ if(Array.isArray(s[k]) && s[k].length===n) d[k]=s[k]; });
@@ -224,6 +230,27 @@ function normalize(l,s){
   d.t = +d.t || 0;
   d.fc = d.fc!==false;
   return d;
+}
+function flipLine(l){
+  const r=l.rows, n=r.length, km=r.map(x=>x.km);
+  const maxD=Math.max(...r.map(x=>x.day||1));
+  l.rows = r.slice().reverse().map((x,j)=>Object.assign({},x,{km: j===0?0:km[n-j], day: maxD+1-(x.day||1)}));
+  const m=(l.route||"").match(/^(.*?) → (.*?)(（.*）)?$/);
+  if(m) l.route = m[2]+" → "+m[1]+(m[3]||"");
+  l.rev=!l.rev;
+}
+function reverseCur(){
+  const l=LINES.find(x=>x.id===cur), s=getState(l);
+  const D=s.nd.filter(Boolean).length+1;
+  flipLine(l);
+  s.rev=!!l.rev;
+  s.brk=s.brk.slice().reverse(); s.memo=s.memo.slice().reverse();
+  s.act=s.act.map(()=>null);
+  s.nd=splitEven(l,s,D);
+  save(l); revArmed=false; openIdx=null;
+  try{ gpsStop(); }catch(e){}
+  render(); window.scrollTo(0,0);
+  toast(l.rows[0].name+"から"+l.rows[l.rows.length-1].name+"へ向かう順にしました");
 }
 function getState(l){
   if(states[l.id]) return states[l.id];
@@ -404,7 +431,7 @@ function renderInner(){
   }
 
   const days = c[n-1].day;
-  let html = `<h1>${l.name}</h1><p class="route">${l.route}</p><p class="sync" id="syncLine">${syncText()}</p>`;
+  let html = `<h1>${l.name}</h1><p class="route">${l.route}</p><button class="revbtn${revArmed?" arm":""}" id="btnRev" type="button">${revArmed?"もう一度押すと反対向きに（記録した到着時刻は消えます）":"⇄ 始発と終着を反対にする"}</button><p class="sync" id="syncLine">${syncText()}</p>`;
   const totalMin = c.reduce((a,x)=>a+x.walk+(+x.brk||0),0);
   html += `<div class="sum">
     <div><b>${totalW.toFixed(1)}km</b><span>歩く距離の目安</span></div>
@@ -538,18 +565,23 @@ document.addEventListener("click", e=>{
     const curLine = LINES.find(x=>x.id===cur);
     if(!curLine || curLine.cat!==catId){
       const first = sortedCat(catId)[0];
-      if(first){ cur=first.id; userSwitched=true; saveCur(); openIdx=null; resetArmed=false; render(); window.scrollTo(0,0); }
+      if(first){ cur=first.id; userSwitched=true; saveCur(); openIdx=null; resetArmed=false; revArmed=false; render(); window.scrollTo(0,0); }
     }
     return;
   }
   const tab = e.target.closest(".tab");
-  if(tab){ cur=tab.dataset.id; userSwitched=true; saveCur(); openIdx=null; resetArmed=false; render(); window.scrollTo(0,0); return; }
+  if(tab){ cur=tab.dataset.id; userSwitched=true; saveCur(); openIdx=null; resetArmed=false; revArmed=false; render(); window.scrollTo(0,0); return; }
   if(e.target.id==="fab"){
     const l=LINES.find(x=>x.id===cur), s=getState(l);
     const i=s.act.findIndex(a=>!a);
     const el=document.getElementById("st"+i);
     if(el){ const top=el.getBoundingClientRect().top+window.scrollY-170; window.scrollTo({top,behavior:"smooth"}); }
     return;
+  }
+  if(e.target.id==="btnRev"){
+    const l=LINES.find(x=>x.id===cur), s=getState(l);
+    if(s.act.some(a=>a) && !revArmed){ revArmed=true; render(); setTimeout(()=>{ if(revArmed){ revArmed=false; render(); } },4000); return; }
+    reverseCur(); return;
   }
   if(e.target.id==="btnReset"){
     const l=LINES.find(x=>x.id===cur);
