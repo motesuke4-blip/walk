@@ -662,14 +662,58 @@ function onPos(p){
   GPS.err=""; GPS.pos={lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy};
   const i0=nextUnchecked(l,s);
   if(i0>=0 && GPS.pos.acc<=120){
+    let ip=-1; for(let k=i0-1;k>=0;k--){ if(s.act[k]){ ip=k; break; } }
+    const lim = gpsReach(l,s,ip);
     let hit=-1;
-    for(let i=i0;i<Math.min(l.rows.length,i0+3);i++){
+    for(let i=i0;i<l.rows.length;i++){
+      if(i>=i0+3 && (ip<0 || i>lim)) break;
       const r=l.rows[i]; if(!r.ll) continue;
       if(hav(GPS.pos.lat,GPS.pos.lon,r.ll[0],r.ll[1])<=150){ hit=i; break; }
     }
     if(hit>=0){ gpsMark(l,s,i0,hit); return; }
+    if(ip>=0 && gpsCatch(l,s,i0,ip,lim)) return;
   }
   gpsPaint();
+}
+/* 前回の記録からの経過時間で、ここまでなら歩けたはずという駅の番号 */
+function gpsReach(l,s,ip){
+  if(ip<0) return -1;
+  const el=((t2m(stamp())-t2m(s.act[ip]))%1440+1440)%1440;
+  if(el>16*60) return -1;
+  const maxKm=(el/60)*s.speed*1.5/(s.factor||1)+1;
+  let t=0, k=ip;
+  for(let i=ip+1;i<l.rows.length;i++){ t+=l.rows[i].km; if(t>maxKm) break; k=i; }
+  return Math.min(l.rows.length-1,k+1);
+}
+/* 駅と駅の間にいるとき：通り過ぎた駅をまとめてチェック（時刻は距離で割り振った推定） */
+function gpsCatch(l,s,i0,ip,lim){
+  if(lim<=i0) return false;
+  const P=GPS.pos, cosL=Math.cos(P.lat*Math.PI/180);
+  const xy=ll=>[(ll[1]-P.lon)*111320*cosL,(ll[0]-P.lat)*110540];
+  let best=null;
+  for(let k=Math.max(i0,1);k<=lim;k++){
+    const a=l.rows[k-1].ll, b=l.rows[k].ll; if(!a||!b) continue;
+    const A=xy(a), B=xy(b), dx=B[0]-A[0], dy=B[1]-A[1], L2=dx*dx+dy*dy;
+    let t = L2>0 ? -(A[0]*dx+A[1]*dy)/L2 : 0; t=Math.max(0,Math.min(1,t));
+    const d=Math.hypot(A[0]+t*dx, A[1]+t*dy);
+    if(!best || d<best.d) best={k,t,d};
+  }
+  if(!best || best.d>1500) return false;
+  const last=best.k-1;           // ここまでは通過済み
+  if(last<i0) return false;
+  const cum=[]; let c=0; l.rows.forEach(r=>{ c+=r.km; cum.push(c); });
+  const cNow=cum[last]+best.t*l.rows[best.k].km;
+  const tp=t2m(s.act[ip]), el=((t2m(stamp())-tp)%1440+1440)%1440;
+  if(cNow<=cum[ip]) return false;
+  for(let k=i0;k<=last;k++){
+    const m=Math.round(tp+el*(cum[k]-cum[ip])/(cNow-cum[ip]));
+    s.act[k]=pad(Math.floor(((m%1440)+1440)%1440/60))+":"+pad(((m%60)+60)%60);
+  }
+  try{ save(l); }catch(e){}
+  const act=document.activeElement;
+  if(!(act && (act.tagName==="TEXTAREA"||act.tagName==="INPUT"))) render();
+  toast((last>i0? l.rows[i0].name+"〜":"")+l.rows[last].name+" を通過済みにしました（時刻は推定）。"+lastGoalText);
+  return true;
 }
 function gpsMark(l,s,i0,hit){
   const now=stamp();
