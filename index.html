@@ -355,7 +355,7 @@ function compute(l,s){
     const walk = Math.round(wk/s.speed*60);
     cumKm += r.km; cumW += wk;
     let arr;
-    if(i===0){ arr=start; dayW=0; nextTh=20; }
+    if(i===0){ arr=(s.act[0]? t2m(s.act[0]) : start); dayW=0; nextTh=20; }
     else if(s.nd[i]){ day++; arr=start+walk; dayW=wk; nextTh=20; }
     else { arr=prevDep+walk; dayW+=wk; }
     let autoBrk=0;
@@ -450,7 +450,7 @@ function renderInner(){
       const a=idx[0], b=idx[idx.length-1];
       const km = idx.reduce((q,i)=>q+c[i].wk,0);
       const from = d===1 ? l.rows[a].name : l.rows[a-1].name;
-      html += `<li><b>${d}日目</b>　${km.toFixed(1)}km ・ ${fm(t2m(s.start))} → ${fm(FC.out[b].arr)}<br>${from} → ${l.rows[b].name}</li>`;
+      html += `<li><b>${d}日目</b>　${km.toFixed(1)}km ・ ${fm(d===1? c[0].arr : t2m(s.start))} → ${fm(FC.out[b].arr)}<br>${from} → ${l.rows[b].name}</li>`;
     }
     html += `</ul>`;
   }
@@ -469,7 +469,7 @@ function renderInner(){
     const x=c[i], done=!!s.act[i];
     if(days>1 && (i===0 || s.nd[i])){
       const from = i===0 ? "" : `${l.rows[i-1].name}から歩き始め`;
-      html += `<div class="day"><span>${x.day}日目</span><small>${fm(t2m(s.start))}スタート${from? "・"+from:""}</small></div>`;
+      html += `<div class="day"><span>${x.day}日目</span><small>${fm(i===0? c[0].arr : t2m(s.start))}スタート${from? "・"+from:""}</small></div>`;
     }
     const cls = ["st", isXfer(r.tr)?"xfer":"", done?"done":"", i===nextIdx?"next":"",
                  i===0?"first":"", i===n-1?"last":"", openIdx===i?"open":""].join(" ");
@@ -481,14 +481,15 @@ function renderInner(){
     if(done){
       const diff = t2m(s.act[i]) - x.arr;
       const dt = diff===0 ? "予定どおり" : (diff>0 ? `+${diff}分遅れ` : `${-diff}分早い`);
-      actLine = `<div class="act ${diff>10?"late":"ok"}">実績 ${s.act[i]}（${dt}）</div>`;
+      actLine = i===0 ? `<div class="act ok">出発 ${s.act[0]}　ここを起点に計算しています（設定の出発時刻は ${s.start}）</div>`
+                      : `<div class="act ${diff>10?"late":"ok"}">実績 ${s.act[i]}（${dt}）</div>`;
     }
     const manBrk = +s.brk[i]||0, autoBrk = x.autoBrk||0, brk = manBrk+autoBrk;
     html += `<div class="${cls}" data-i="${i}" id="st${i}">
       <button class="dot" type="button" data-act="check" data-i="${i}" aria-label="${r.name}に着いたら押す（時刻を記録）"><span></span></button>
       <div class="card">
         <button class="head" type="button" data-act="open" data-i="${i}" aria-expanded="${openIdx===i}">
-          <div class="line1"><span class="nm">${r.name}<span class="cd">${r.code}</span></span><span class="at">${fm(FC.out[i].arr)}${FC.out[i].adj?`<small>当初 ${fm(FC.out[i].plan)}</small>`:""}</span></div>
+          <div class="line1"><span class="nm">${r.name}<span class="cd">${r.code}</span></span><span class="at">${fm(FC.out[i].arr)}${FC.out[i].adj && FC.out[i].arr!==FC.out[i].plan?`<small>当初 ${fm(FC.out[i].plan)}</small>`:""}</span></div>
           <div class="line2"><span>${seg}</span><span>${walkTxt}</span></div>
           ${r.tr? `<div class="tr"><b>乗換</b>　${r.tr}</div>`:""}
           ${brk>0 && i>0 && i<n-1 ? `<div class="tr">休憩 ${brk}分${autoBrk>0?`（20km区切りで自動${autoBrk}分${manBrk>0?`＋追加${manBrk}分`:""}）`:""} → ${fm(FC.out[i].dep)}発</div>`:""}
