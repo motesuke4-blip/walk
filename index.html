@@ -169,6 +169,7 @@ button:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-vi
 .badge.ask{border-style:dashed}
 .tm{display:flex;flex-direction:column;align-items:flex-end;flex:0 0 auto}
 .at.dim{opacity:.4}
+.at.old{opacity:.4;text-decoration:line-through;text-decoration-thickness:2px}
 .real{font-size:20px;font-weight:700;line-height:1.3;white-space:nowrap;color:var(--ok)}
 .real.late{color:var(--late)}
 .real em{font-style:normal;font-size:12px;font-weight:700;margin-right:4px;opacity:.85}
@@ -622,7 +623,7 @@ function renderInner(){
       <button class="dot" type="button" data-act="check" data-i="${i}" aria-label="${r.name}に着いたら押す（時刻を記録）"><span></span></button>
       <div class="card">
         <button class="head" type="button" data-act="open" data-i="${i}" aria-expanded="${openIdx===i}">
-          <div class="line1"><span class="nm">${r.name}<span class="cd">${r.code}</span></span><span class="tm"><span class="at${done?" dim":""}">${fm(done? pv : FC.out[i].arr)}${!done && FC.out[i].adj && FC.out[i].arr!==FC.out[i].plan?`<small>当初 ${fm(FC.out[i].plan)}</small>`:""}</span>${realHtml}</span></div>
+          <div class="line1"><span class="nm">${r.name}<span class="cd">${r.code}</span></span><span class="tm">${done ? `<span class="at dim">${fm(pv)}</span>` : (FC.out[i].adj && FC.out[i].arr!==FC.out[i].plan ? `<span class="at old" aria-label="当初の予定">${fm(FC.out[i].plan)}</span><span class="at">${fm(FC.out[i].arr)}</span>` : `<span class="at">${fm(FC.out[i].arr)}</span>`)}${realHtml}</span></div>
           <div class="line2"><span>${seg}</span><span>${walkTxt}</span></div>
           ${r.tr? `<div class="tr"><b>乗換</b>　${r.tr}</div>`:""}
           ${brk>0 && i>0 && i<n-1 ? `<div class="tr">休憩 ${brk}分${autoBrk>0?`（20km区切りで自動${autoBrk}分${manBrk>0?`＋追加${manBrk}分`:""}）`:""} → ${fm(FC.out[i].dep)}発</div>`:""}
